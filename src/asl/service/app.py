@@ -85,5 +85,23 @@ app = FastAPI(title="asl", version="1.0.0", lifespan=lifespan)
 def health():
     return {
         'status': 'ok',
-        'device': app.state.bundle.model_version,
+        'Inference': True if app.state.bundle else False,
     }
+
+
+@app.get('/ready')
+def ready():
+    try:
+        app.state.bundle.model
+    except AttributeError:
+        raise HTTPException(status_code=503, detail="Model not loaded")
+    model_version = app.state.bundle.model_version
+    return {
+        'status': 'ok',
+        'model_version': model_version,
+    }
+
+
+@app.post('/v1/predict')
+def predict(img, bg: BackgroundTasks):
+    ...
