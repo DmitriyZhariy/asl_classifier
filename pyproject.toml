@@ -9,10 +9,12 @@ dependencies = [
     'uvicorn',
     'pydantic',
     'pydantic-settings',
+    'numpy',
     'psycopg[binary]',
     'torch',
     'torchvision',
     'albumentations',
+    'python-multipart',
 ]
 
 

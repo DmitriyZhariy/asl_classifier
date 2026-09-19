@@ -1,19 +1,18 @@
 import time
 import uuid
-
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-
-from fastapi import FastAPI, BackgroundTasks, HTTPException
-
-from pydantic import BaseModel, Field
+from io import BytesIO
 
 import albumentations as A
-from albumentations.pytorch import ToTensorV2
+import numpy as np
 import torch
 import torchvision
+from albumentations.pytorch import ToTensorV2
+from fastapi import BackgroundTasks, FastAPI, HTTPException, UploadFile
+from PIL import Image
+from pydantic import BaseModel
 
-from asl import db
 from asl.config import settings
 
 
@@ -28,10 +27,10 @@ class InferenceBundle:
 
 class Prediction(BaseModel):
     prediction_class: int
+    confidence: float
     all_probabilities: list[float]
-    asl: bool
     model_version: str
-    request_id: int
+    request_id: str
     latency_ms: float
 
 
@@ -85,14 +84,14 @@ app = FastAPI(title="asl", version="1.0.0", lifespan=lifespan)
 def health():
     return {
         'status': 'ok',
-        'Inference': True if app.state.bundle else False,
+        'inference': bool(app.state.bundle),
     }
 
 
 @app.get('/ready')
 def ready():
     try:
-        app.state.bundle.model
+        _ = app.state.bundle.model
     except AttributeError:
         raise HTTPException(status_code=503, detail="Model not loaded")
     model_version = app.state.bundle.model_version
@@ -103,5 +102,36 @@ def ready():
 
 
 @app.post('/v1/predict')
-def predict(img, bg: BackgroundTasks):
-    ...
+async def predict(
+    bg: BackgroundTasks,
+    file: UploadFile,
+    ) -> Prediction:
+    t0 = time.perf_counter()
+    request_id = str(uuid.uuid4())
+
+    image_bytes = await file.read()
+    image = Image.open(BytesIO(image_bytes)).convert("RGB")
+    image_tensor = app.state.bundle.transform(image=np.array(image))["image"]
+
+    image_tensor = image_tensor.unsqueeze(0).to(app.state.bundle.device)
+
+    with torch.inference_mode():
+        logits = app.state.bundle.model(image_tensor)
+        all_probabilities = torch.softmax(logits, dim=1)
+        prediction_class = all_probabilities.argmax(dim=1).item()
+        confidence = all_probabilities[0, prediction_class].item()
+
+    all_probabilities = all_probabilities[0].tolist()
+
+    latency_ms = (time.perf_counter() - t0) * 1000
+
+    # bg.add_task()
+    
+    return Prediction(
+        prediction_class=prediction_class,
+        confidence=confidence,
+        all_probabilities=all_probabilities,
+        model_version=app.state.bundle.model_version,
+        request_id=request_id,
+        latency_ms=latency_ms,
+    )
