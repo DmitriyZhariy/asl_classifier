@@ -1,0 +1,7 @@
+images/
+
+.venv/
+.vscode/
+.env
+__pycache__/
+.pytest_cache/
