@@ -25,5 +25,11 @@ class Settings(BaseSettings):
     )
     model_version: str = "1.0.0"
 
+    allowed_content_types: list = (
+        "image/jpeg",
+        "image/png",
+        "image/webp"
+    )
+
 
 settings = Settings()

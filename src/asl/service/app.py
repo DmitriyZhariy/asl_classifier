@@ -10,7 +10,7 @@ import torch
 import torchvision
 from albumentations.pytorch import ToTensorV2
 from fastapi import BackgroundTasks, FastAPI, HTTPException, UploadFile
-from PIL import Image
+from PIL import Image, UnidentifiedImageError
 from pydantic import BaseModel
 
 from asl import db
@@ -29,7 +29,7 @@ class InferenceBundle:
 class Prediction(BaseModel):
     request_id: uuid.UUID
     model_version: str
-    prediction_class: int
+    prediction_class: str
     confidence: float
     all_probabilities: dict
     latency_ms: float
@@ -109,17 +109,26 @@ async def predict(
     file: UploadFile,
     ) -> Prediction:
     t0 = time.perf_counter()
-    request_id = str(uuid.uuid4())
 
-    input_metadata = {
-        "filename": file.filename,
-        "content_type": file.content_type,
-    }
+    if file.content_type not in settings.allowed_content_types:
+        raise HTTPException(
+            status_code=415,
+            detail="Поддерживаются только jpeg, png и webp файлы",
+        )
 
     image_bytes = await file.read()
-    image = Image.open(BytesIO(image_bytes)).convert("RGB")
-    image_tensor = app.state.bundle.transform(image=np.array(image))["image"]
 
+    try:
+        image = Image.open(BytesIO(image_bytes))
+        image.load()
+        image = image.convert("RGB")
+    except UnidentifiedImageError:
+        raise HTTPException(
+            status_code=422,
+            detail="Файл изображения некорректен"
+        )
+    
+    image_tensor = app.state.bundle.transform(image=np.array(image))["image"]
     image_tensor = image_tensor.unsqueeze(0).to(app.state.bundle.device)
 
     with torch.inference_mode():
@@ -130,6 +139,15 @@ async def predict(
 
     all_probabilities = all_probabilities[0].tolist()
     all_probabilities = dict(enumerate(all_probabilities))
+
+    prediction_class = settings.class_names[prediction_class]
+
+    request_id = str(uuid.uuid4())
+
+    input_metadata = {
+        "filename": file.filename,
+        "content_type": file.content_type,
+    }
 
     latency_ms = (time.perf_counter() - t0) * 1000
 
