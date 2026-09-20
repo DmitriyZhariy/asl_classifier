@@ -13,6 +13,7 @@ from fastapi import BackgroundTasks, FastAPI, HTTPException, UploadFile
 from PIL import Image
 from pydantic import BaseModel
 
+from asl import db
 from asl.config import settings
 
 
@@ -26,11 +27,11 @@ class InferenceBundle:
 
 
 class Prediction(BaseModel):
+    request_id: uuid.UUID
+    model_version: str
     prediction_class: int
     confidence: float
-    all_probabilities: list[float]
-    model_version: str
-    request_id: str
+    all_probabilities: dict
     latency_ms: float
 
 
@@ -72,6 +73,7 @@ async def lifespan(app: FastAPI):
         model_version=settings.model_version
     )
 
+    db.init()
     yield
 
     del app.state.bundle
@@ -109,6 +111,11 @@ async def predict(
     t0 = time.perf_counter()
     request_id = str(uuid.uuid4())
 
+    input_metadata = {
+        "filename": file.filename,
+        "content_type": file.content_type,
+    }
+
     image_bytes = await file.read()
     image = Image.open(BytesIO(image_bytes)).convert("RGB")
     image_tensor = app.state.bundle.transform(image=np.array(image))["image"]
@@ -122,16 +129,25 @@ async def predict(
         confidence = all_probabilities[0, prediction_class].item()
 
     all_probabilities = all_probabilities[0].tolist()
+    all_probabilities = dict(enumerate(all_probabilities))
 
     latency_ms = (time.perf_counter() - t0) * 1000
 
-    # bg.add_task()
+    bg.add_task(
+        db.save_prediction, 
+        request_id, 
+        app.state.bundle.model_version,
+        prediction_class, 
+        all_probabilities,
+        input_metadata,
+        latency_ms,
+        )
     
     return Prediction(
+        request_id=request_id,
+        model_version=app.state.bundle.model_version,
         prediction_class=prediction_class,
         confidence=confidence,
         all_probabilities=all_probabilities,
-        model_version=app.state.bundle.model_version,
-        request_id=request_id,
         latency_ms=latency_ms,
     )
