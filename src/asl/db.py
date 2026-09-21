@@ -1,5 +1,3 @@
-from uuid import UUID
-
 import psycopg
 from psycopg.types.json import Json
 
@@ -26,7 +24,7 @@ def init() -> None:
         conn.execute(DDL)
 
 
-def save_prediction(request_id: UUID, 
+def save_prediction(request_id: str, 
                     model_version: str,
                     prediction_class: str, 
                     all_probabilities: dict[float],

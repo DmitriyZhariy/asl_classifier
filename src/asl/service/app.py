@@ -2,26 +2,22 @@ import time
 import uuid
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from io import BytesIO
 
-import albumentations as A
 import numpy as np
-import torch
-import torchvision
-from albumentations.pytorch import ToTensorV2
+import onnxruntime as ort
 from fastapi import BackgroundTasks, FastAPI, HTTPException, UploadFile
 from PIL import Image, UnidentifiedImageError
 from pydantic import BaseModel
 
 from asl import db
 from asl.config import settings
+from asl.inference.preprocessing import preprocess_image
+from asl.inference.postprocessing import softmax
 
 
 @dataclass
 class InferenceBundle:
-    model: torch.nn.Module
-    transform: A.Compose
-    device: torch.device
+    model: ort.InferenceSession
     class_names: list[str]
     model_version: str
 
@@ -37,40 +33,12 @@ class Prediction(BaseModel):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
-    model = torchvision.models.shufflenet_v2_x1_5(
-        weights=None,
-        num_classes=settings.num_classes,
-    )
-
-    checkpoint = torch.load(
-        settings.weights_path, 
-        map_location=device, 
-        weights_only=True,
-        )
-
-    model.load_state_dict(checkpoint)
-    model.to(device)
-    model.eval()
-
-    transform = A.Compose(
-        [
-            A.Resize(settings.input_height, settings.input_width),
-            A.Normalize(
-                mean=settings.normalize_mean, 
-                std=settings.normalize_std
-            ),
-            ToTensorV2(),
-        ]
-    )
+    model = ort.InferenceSession(settings.weights_path, providers=["CPUExecutionProvider"])
 
     app.state.bundle = InferenceBundle(
         model=model,
-        transform=transform,
-        device=device,
         class_names=settings.class_names,
-        model_version=settings.model_version
+        model_version=settings.model_version,
     )
 
     db.init()
@@ -116,31 +84,30 @@ async def predict(
             detail="Поддерживаются только jpeg, png и webp файлы",
         )
 
-    image_bytes = await file.read()
-
     try:
-        image = Image.open(BytesIO(image_bytes))
-        image.load()
-        image = image.convert("RGB")
+        image_tensor = await preprocess_image(file)
     except UnidentifiedImageError:
         raise HTTPException(
             status_code=422,
             detail="Файл изображения некорректен"
         )
-    
-    image_tensor = app.state.bundle.transform(image=np.array(image))["image"]
-    image_tensor = image_tensor.unsqueeze(0).to(app.state.bundle.device)
 
-    with torch.inference_mode():
-        logits = app.state.bundle.model(image_tensor)
-        all_probabilities = torch.softmax(logits, dim=1)
-        prediction_class = all_probabilities.argmax(dim=1).item()
-        confidence = all_probabilities[0, prediction_class].item()
+    model_input = app.state.bundle.model.get_inputs()[0]
+    model_output = app.state.bundle.model.get_outputs()[0]
+
+    logits = app.state.bundle.model.run(
+        [model_output.name],
+        {model_input.name: image_tensor},
+    )[0]
+
+    all_probabilities = softmax(logits)
+    prediction_class = int(np.argmax(all_probabilities[0]))
+    confidence = float(all_probabilities[0, prediction_class])
 
     all_probabilities = all_probabilities[0].tolist()
     all_probabilities = dict(enumerate(all_probabilities))
 
-    prediction_class = settings.class_names[prediction_class]
+    prediction_class = app.state.bundle.class_names[prediction_class]
 
     request_id = str(uuid.uuid4())
 

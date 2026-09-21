@@ -1,6 +1,6 @@
 [project]
 name = "asl"
-version = "1.0.1"
+version = "1.0.2"
 description = "ASL classifier mini"
 requires-python = ">=3.11,<3.13"
 
@@ -11,10 +11,9 @@ dependencies = [
     'pydantic-settings',
     'numpy',
     'psycopg[binary]',
-    'torch',
-    'torchvision',
-    'albumentations',
+    'onnxruntime',
     'python-multipart',
+    'pillow'
 ]
 
 
