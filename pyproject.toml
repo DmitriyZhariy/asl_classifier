@@ -1,6 +1,6 @@
 [project]
 name = "asl"
-version = "1.0.2"
+version = "1.0.3"
 description = "ASL classifier mini"
 requires-python = ">=3.11,<3.13"
 

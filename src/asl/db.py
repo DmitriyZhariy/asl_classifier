@@ -4,7 +4,7 @@ from psycopg.types.json import Json
 from asl.config import settings
 
 DDL = """
-CREATE TABLE IF NOT EXISTS predictions
+CREATE TABLE IF NOT EXISTS predictions (
 
     request_id          uuid PRIMARY KEY,
     ts                  timestamptz NOT NULL DEFAULT now(),
@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS predictions
     all_probabilities   jsonb NOT NULL,
     input_metadata      jsonb NOT NULL,
     latency_ms          real
+    )
 """
 
 
