@@ -3,7 +3,6 @@ import uuid
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 
-import numpy as np
 import onnxruntime as ort
 from fastapi import BackgroundTasks, FastAPI, HTTPException, UploadFile
 from PIL import Image, UnidentifiedImageError
@@ -12,13 +11,12 @@ from pydantic import BaseModel
 from asl import db
 from asl.config import settings
 from asl.inference.preprocessing import preprocess_image
-from asl.inference.postprocessing import softmax
+from asl.inference.postprocessing import predict_image
 
 
 @dataclass
 class InferenceBundle:
     model: ort.InferenceSession
-    class_names: list[str]
     model_version: str
 
 
@@ -37,7 +35,6 @@ async def lifespan(app: FastAPI):
 
     app.state.bundle = InferenceBundle(
         model=model,
-        class_names=settings.class_names,
         model_version=settings.model_version,
     )
 
@@ -92,29 +89,14 @@ async def predict(
             detail="Файл изображения некорректен"
         )
 
-    model_input = app.state.bundle.model.get_inputs()[0]
-    model_output = app.state.bundle.model.get_outputs()[0]
-
-    logits = app.state.bundle.model.run(
-        [model_output.name],
-        {model_input.name: image_tensor},
-    )[0]
-
-    all_probabilities = softmax(logits)
-    prediction_class = int(np.argmax(all_probabilities[0]))
-    confidence = float(all_probabilities[0, prediction_class])
-
-    all_probabilities = all_probabilities[0].tolist()
-    all_probabilities = dict(enumerate(all_probabilities))
-
-    prediction_class = app.state.bundle.class_names[prediction_class]
-
     request_id = str(uuid.uuid4())
 
     input_metadata = {
         "filename": file.filename,
         "content_type": file.content_type,
     }
+
+    all_probabilities, prediction_class, confidence = predict_image(app.state.bundle.model, image_tensor)
 
     latency_ms = (time.perf_counter() - t0) * 1000
 
