@@ -21,8 +21,8 @@ dependencies = [
 dev = [
     'pytest',
     'httpx',
-    'locust',
-    'ruff'
+    "locust",
+    'ruff',
 ]
 
 
