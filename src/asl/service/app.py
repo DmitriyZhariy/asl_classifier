@@ -5,13 +5,13 @@ from dataclasses import dataclass
 
 import onnxruntime as ort
 from fastapi import BackgroundTasks, FastAPI, HTTPException, UploadFile
-from PIL import Image, UnidentifiedImageError
+from PIL import UnidentifiedImageError
 from pydantic import BaseModel
 
 from asl import db
 from asl.config import settings
-from asl.inference.preprocessing import preprocess_image
 from asl.inference.postprocessing import predict_image
+from asl.inference.preprocessing import preprocess_image
 
 
 @dataclass

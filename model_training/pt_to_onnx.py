@@ -5,7 +5,6 @@ import onnxruntime as ort
 import torch
 from torchvision.models import shufflenet_v2_x1_5
 
-
 PT_PATH = Path("weights/shufflenet_v1.pt")
 ONNX_PATH = Path("weights/shufflenet_v1.onnx")
 

@@ -36,3 +36,9 @@ module-name = "asl"
 [tool.pytest.ini_option]
 testpaths = ["tests"]
 addopts = "-q"
+
+[tool.ruff]
+line-length = 150
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]

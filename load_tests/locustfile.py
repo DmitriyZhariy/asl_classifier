@@ -1,6 +1,6 @@
 from io import BytesIO
 
-from locust import HttpUser, task, between
+from locust import HttpUser, between, task
 from PIL import Image
 
 

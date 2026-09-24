@@ -1,8 +1,8 @@
 import numpy as np
-
 import onnxruntime as ort
 
 from asl.config import settings
+
 
 def softmax(logits: np.ndarray) -> np.ndarray:
     shifted_logits = logits - np.max(
