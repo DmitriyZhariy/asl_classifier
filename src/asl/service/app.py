@@ -59,8 +59,8 @@ def health():
 def ready():
     try:
         _ = app.state.bundle.model
-    except AttributeError:
-        raise HTTPException(status_code=503, detail="Model not loaded")
+    except AttributeError as err:
+        raise HTTPException(status_code=503, detail="Model not loaded") from err
     model_version = app.state.bundle.model_version
     return {
         'status': 'ok',
@@ -83,11 +83,11 @@ async def predict(
 
     try:
         image_tensor = await preprocess_image(file)
-    except UnidentifiedImageError:
+    except UnidentifiedImageError as err:
         raise HTTPException(
             status_code=422,
-            detail="Файл изображения некорректен"
-        )
+            detail="Файл изображения некорректен" 
+        ) from err
 
     request_id = str(uuid.uuid4())
 
