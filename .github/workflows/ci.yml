@@ -10,7 +10,7 @@ jobs:
     services:
       postgres:
         image: postgres:16
-        env: {POSTGRES_PASSWORD:test, POSTGRES_DB:asl}
+        env: {POSTGRES_PASSWORD: test, POSTGRES_DB: asl}
         ports: ["5432:5432"]
         options: >-
           --health-cmd "pg_isready -U postgres"
