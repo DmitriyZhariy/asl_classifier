@@ -7,4 +7,5 @@ __pycache__/
 data/
 k8s/
 tests/
-locustfile.py
+load_tests/
+model_training/
