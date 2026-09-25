@@ -1,6 +1,6 @@
 [project]
 name = "asl"
-version = "1.0.3"
+version = "1.0.4"
 description = "ASL classifier mini"
 requires-python = ">=3.11,<3.13"
 
@@ -36,6 +36,7 @@ module-name = "asl"
 [tool.pytest.ini_option]
 testpaths = ["tests"]
 addopts = "-q"
+markers = ["integration needs DB - URL in DATABASE_URL"]
 
 [tool.ruff]
 line-length = 150
