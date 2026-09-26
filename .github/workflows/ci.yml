@@ -98,7 +98,8 @@ jobs:
 
       - name: generate-valid-image
         run: |
-          python -c "from PIL import Image; Image.new('RGB', (516,516), (255,0,0)).save('tmp/valid_image.png')"
+          pip install --quiet Pillow
+          python -c "from PIL import Image; Image.new('RGB', (516,516), (255,0,0)).save('/tmp/valid_image.png')"
       
       - name: smoke
         run: |
