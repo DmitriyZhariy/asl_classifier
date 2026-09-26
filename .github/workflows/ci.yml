@@ -109,7 +109,7 @@ jobs:
 
           curl --fail -s localhost:8080/health; echo
           curl --fail -s localhost:8080/v1/predict \
-            -H "Content-Type: image/png" -d @/tmp/valid_image.png; echo
+            -F 'file=@/tmp/valid_image.png;type=image/png'
 
           sleep 2
 
@@ -129,5 +129,3 @@ jobs:
           kubectl describe pod -l app=postgres | tail -40
           kubectl logs -l app=postgres --previous --tail=50 || true
           kubectl logs -l app=postgres --tail=50 || true
-
-          echo "password length = ${#DB_PASSWORD}"
