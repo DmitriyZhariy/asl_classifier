@@ -75,7 +75,7 @@ jobs:
       - name: image-cluster
         run: |
           docker pull "$IMAGE"
-          kind load docker-image "$IMAGE" --name cli
+          kind load docker-image "$IMAGE" --name ci
 
       - name: get-secrets
         env:
