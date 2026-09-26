@@ -117,6 +117,8 @@ jobs:
 
       - name: diagnostic
         if: failure()
+        env:
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
 
         run: |
           kubectl get pods -o wide
@@ -126,3 +128,5 @@ jobs:
           kubectl describe pod -l app=postgres | tail -40
           kubectl logs -l app=postgres --previous --tail=50 || true
           kubectl logs -l app=postgres --tail=50 || true
+
+          echo "password length = ${#DB_PASSWORD}"
