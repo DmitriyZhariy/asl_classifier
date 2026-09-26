@@ -70,7 +70,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - uses: helm/kind-action@v1
-        with: {cluster-name: ci}
+        with: {cluster_name: ci}
 
       - name: image-cluster
         run: |
