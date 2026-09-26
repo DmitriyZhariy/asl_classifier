@@ -34,7 +34,6 @@ def save_prediction(request_id: str,
                     latency_ms: float, 
                     status_code: int,
                     ) -> None:
-    print(f'It is working: {status_code}')
     if not settings.database_url:
         return
     with psycopg.connect(settings.database_url) as conn:

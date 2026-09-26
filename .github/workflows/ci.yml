@@ -83,7 +83,7 @@ jobs:
         run: |
           kubectl create secret generic asl-secrets \
             --from-literal=POSTGRES_PASSWORD="${DB_PASSWORD}" \
-            --from-literal=POSTGRES_URL="postgresql://postgres:$DB_PASSWORD@postgres:5432/asl"
+            --from-literal=DATABASE_URL="postgresql://postgres:$DB_PASSWORD@postgres:5432/asl"
 
       - name: base
         run: |
