@@ -52,3 +52,73 @@ jobs:
           tags: "${{ env.IMAGE }}"
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    
+    permissions: {contents: read, packages: read}
+
+    steps:
+      - uses: actions/checkout@v7
+      - run: |
+          OWNER_LC=$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')
+          echo "IMAGE=ghcr.io/${OWNER_LC}/asl-service/sha-${GITHUB_SHA}" >> "$GITHUB_ENV"
+      - uses: docker/login-action@v4
+        with: 
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: helm/kind-action@v1
+        with: {cluster-name: ci}
+
+      - name: image-cluster
+        run: |
+          docker pull "$IMAGE"
+          kind load docker-image "$IMAGE" --name cli
+
+      - name: get-secrets
+        env:
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+        run: |
+          kubectl create secret generic asl-secrets \
+            --from-literal=POSTGRES_PASSWORD="${DB_PASSWORD}" \
+            --from-literal=POSTGRES_URL="postgresql://postgres:$DB_PASSWORD@postgres:5432/asl"
+
+      - name: base
+        run: |
+          kubectl apply -f k8s/postgres.yaml
+          kubectl rollout status deploy/postgres --timeout 180s
+      
+      - name: service
+        run: |
+          kubectl apply -f k8s/
+          kubectl set image deploy/asl-service api="$IMAGE"
+          kubectl rollout status deploy/asl-service --timeout 180s
+
+      - name: generate-valid-image
+        run: |
+          python -c "from PIL import Image; Image.new('RGB', (516,516), (255,0,0)).save('tmp/valid_image.png')"
+      
+      - name: smoke
+        run: |
+          kubectl port-forward svc/asl-service 8080:80 & 
+          
+          sleep 5s
+
+          curl --fail -s localhost:8080/health; echo
+          curl --fail -s localhost:8080/v1/predict \
+            -H "Content-Type: image/png" -d @/tmp/valid_image.png; echo
+
+          sleep 2
+
+          kubectl exec deploy/postgres -- psql -U postgres -d churn \
+            -tc "SELECT * FROM predictions" | grep -q 1
+
+      - name: diagnostic
+        if: failure
+
+        run: |
+          kubectl get pods -o wide
+          kubectl describe deploy asl-service | tail -20
+          kubectl logs deploy asl-service --tail=30 || true

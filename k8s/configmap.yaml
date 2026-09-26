@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: asl-config
+data:
+  LOG_LEVEL: "INFO"
+  MODEL_PATH: "artifacts/shufflenet_v1.onnx"
