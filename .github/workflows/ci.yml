@@ -124,8 +124,8 @@ jobs:
 
         run: |
           kubectl get pods -o wide
-          kubectl describe deploy asl-service | tail -20
-          kubectl logs deploy asl-service --tail=30 || true
+          kubectl describe deploy/asl-service | tail -20
+          kubectl logs deploy/asl-service --tail=30 || true
 
           kubectl describe pod -l app=postgres | tail -40
           kubectl logs -l app=postgres --previous --tail=50 || true
