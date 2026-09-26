@@ -116,7 +116,7 @@ jobs:
             -tc "SELECT * FROM predictions" | grep -q 1
 
       - name: diagnostic
-        if: failure
+        if: failure()
 
         run: |
           kubectl get pods -o wide
