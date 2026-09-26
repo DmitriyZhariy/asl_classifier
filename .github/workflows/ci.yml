@@ -113,7 +113,7 @@ jobs:
 
           sleep 2
 
-          kubectl exec deploy/postgres -- psql -U postgres -d churn \
+          kubectl exec deploy/postgres -- psql -U postgres -d asl \
             -tc "SELECT * FROM predictions" | grep -q 1
 
       - name: diagnostic
