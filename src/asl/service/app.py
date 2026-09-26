@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 
 import onnxruntime as ort
-from fastapi import BackgroundTasks, FastAPI, HTTPException, UploadFile
+from fastapi import BackgroundTasks, FastAPI, HTTPException, UploadFile, status
 from PIL import UnidentifiedImageError
 from pydantic import BaseModel
 
@@ -60,7 +60,7 @@ def ready():
     try:
         _ = app.state.bundle.model
     except AttributeError as err:
-        raise HTTPException(status_code=503, detail="Model not loaded") from err
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Model not loaded") from err
     model_version = app.state.bundle.model_version
     return {
         'status': 'ok',
@@ -75,26 +75,39 @@ async def predict(
     ) -> Prediction:
     t0 = time.perf_counter()
 
-    if file.content_type not in settings.allowed_content_types:
-        raise HTTPException(
-            status_code=415,
-            detail="Поддерживаются только jpeg, png и webp файлы",
-        )
-
-    try:
-        image_tensor = await preprocess_image(file)
-    except UnidentifiedImageError as err:
-        raise HTTPException(
-            status_code=422,
-            detail="Файл изображения некорректен" 
-        ) from err
-
     request_id = str(uuid.uuid4())
 
     input_metadata = {
         "filename": file.filename,
         "content_type": file.content_type,
     }
+
+    def log_and_raise(status_code: int, detail: str, err: Exception | None = None):
+        latency_ms = (time.perf_counter() - t0) * 1000
+
+
+        db.save_prediction(
+            request_id, 
+            app.state.bundle.model_version,
+            None, 
+            None,
+            input_metadata,
+            latency_ms,
+            status_code,
+        )
+        raise HTTPException(
+            status_code=status_code,
+            detail=detail,
+        ) from err
+
+
+    if file.content_type not in settings.allowed_content_types:
+        log_and_raise(status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, "Поддерживаются только jpeg, png и webp файлы")
+
+    try:
+        image_tensor = await preprocess_image(file)
+    except UnidentifiedImageError as err:
+        log_and_raise(status.HTTP_422_UNPROCESSABLE_CONTENT, "Файл изображения некорректен", err)
 
     all_probabilities, prediction_class, confidence = predict_image(app.state.bundle.model, image_tensor)
 
@@ -108,7 +121,8 @@ async def predict(
         all_probabilities,
         input_metadata,
         latency_ms,
-        )
+        status.HTTP_200_OK,
+    )
     
     return Prediction(
         request_id=request_id,
