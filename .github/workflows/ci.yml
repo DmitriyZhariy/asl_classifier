@@ -64,6 +64,7 @@ jobs:
       - run: |
           OWNER_LC=$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')
           echo "IMAGE=ghcr.io/${OWNER_LC}/asl-service/sha-${GITHUB_SHA}" >> "$GITHUB_ENV"
+      
       - uses: docker/login-action@v4
         with: 
           registry: ghcr.io
@@ -129,3 +130,5 @@ jobs:
           kubectl describe pod -l app=postgres | tail -40
           kubectl logs -l app=postgres --previous --tail=50 || true
           kubectl logs -l app=postgres --tail=50 || true
+
+          kubectl exec deploy/asl-service -- printenv DATABASE_URL
