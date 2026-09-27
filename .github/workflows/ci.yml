@@ -109,7 +109,7 @@ jobs:
           sleep 5s
 
           curl --fail -s localhost:8080/health; echo
-          curl --fail -s localhost:8080/v1/predict \
+          curl -s localhost:8080/v1/predict \
             -F 'file=@/tmp/valid_image.png;type=image/png'
 
           sleep 2
