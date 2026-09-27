@@ -102,6 +102,10 @@ jobs:
           pip install --quiet Pillow
           python -c "from PIL import Image; Image.new('RGB', (516,516), (255,0,0)).save('/tmp/valid_image.png')"
       
+      - name: generate-invalid-image
+        run: |
+          head -c 100 /dev/urandom > /tmp/invalid_image.png
+
       - name: smoke
         run: |
           kubectl port-forward svc/asl-service 8080:80 & 
@@ -129,6 +133,23 @@ jobs:
           if [ "$VALID_RECORD" -ne 1 ]; then
           echo "::error::prediction with status_code=200 and correct probabilities not found"
           exit 1
+          fi
+
+          curl -s localhost:8080/v1/predict \
+            -F 'file=@/tmp/valid_image.png;type=image/png'
+
+          INVALID_RECORD=$(kubectl exec -i deploy/postgres -- psql -U postgres -d asl -tA << 'EOF'
+            SELECT COUNT(*)
+            FROM predictions
+            WHERE status_code = 422;
+          EOF
+          )
+
+          echo "INVALID_RECORD=$INVALID_RECORD"
+
+          if [ "$INVALID_RECORD" -ne 1 ]; then
+            echo "::error::prediction with status_code=422 for invalid image testing not found"
+            exit 1
           fi
 
       - name: diagnostic
