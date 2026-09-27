@@ -142,7 +142,7 @@ jobs:
           INVALID_RECORD=$(kubectl exec -i deploy/postgres -- psql -U postgres -d asl -tA << 'EOF'
             SELECT COUNT(*)
             FROM predictions
-            WHERE status_code = 99999;
+            WHERE status_code = 422;
           EOF
           )
 

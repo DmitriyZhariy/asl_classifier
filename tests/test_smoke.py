@@ -13,7 +13,7 @@ def test_predict_smoke(client, valid_image_file):
     assert len(body['all_probabilities']) == len(settings.class_names)
     print(body['all_probabilities'])
     assert sum(body['all_probabilities'].values()) <= 1.0 + 1e-12
-    assert body["latency_ms"] >= 0
+    assert body["latency_ms"] >= 1000
     assert body["model_version"]
 
 
