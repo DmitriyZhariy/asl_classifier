@@ -136,7 +136,7 @@ jobs:
           fi
 
           curl -s localhost:8080/v1/predict \
-            -F 'file=@/tmp/valid_image.png;type=image/png'
+            -F 'file=@/tmp/valid_image.png;type=invalid_image/png'
 
           INVALID_RECORD=$(kubectl exec -i deploy/postgres -- psql -U postgres -d asl -tA << 'EOF'
             SELECT COUNT(*)
