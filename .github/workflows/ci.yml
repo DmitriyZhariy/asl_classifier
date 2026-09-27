@@ -114,8 +114,20 @@ jobs:
 
           sleep 2
 
-          kubectl exec deploy/postgres -- psql -U postgres -d asl \
-            -tc "SELECT * FROM predictions" | grep -q 1
+          VALID_RECORD=$(kubectl exec -i deploy/postgres -- psql -U postgres -d asl -tA << 'EOF'
+            SELECT COUNT(*) 
+            FROM predictions
+            WHERE 
+              (status_code::numeric >= 400)
+              OR
+              (
+                ABS( 
+                  SELECT SUM(value::numeric)
+                  FROM jsonb_each_text(all_probabilities) - 1
+                ) < 1e-12
+              );
+          EOF
+          )
 
       - name: diagnostic
         if: failure()
