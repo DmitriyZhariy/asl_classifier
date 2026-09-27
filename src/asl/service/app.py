@@ -51,6 +51,8 @@ app = FastAPI(title="asl", version="1.0.0", lifespan=lifespan)
 def health():
     return {
         'status': 'ok',
+        'log_info': settings.log_level,
+        'model_name': settings.model_name,
         'inference': bool(app.state.bundle),
     }
 

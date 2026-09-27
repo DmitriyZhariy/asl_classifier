@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     weights_path: str = "artifacts/shufflenet_v1.onnx"
     database_url: str | None = None
     log_level: str = "INFO"
+    model_name: str | None = None
     num_classes: int = 3
     class_names: list[str] = ["A", "B", "C"]
 
