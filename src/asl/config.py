@@ -4,7 +4,7 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     model_config = {"env_file": ".env"}
 
-    weights_path: str = "artifacts/shufflenet_v1.onnx"
+    weights_path: str | None = None
     database_url: str | None = None
     log_level: str = "INFO"
     model_name: str | None = None

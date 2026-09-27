@@ -5,4 +5,4 @@ metadata:
 data:
   LOG_LEVEL: "INFO"
   MODEL_NAME: "asl"
-  MODEL_PATH: "artifacts/shufflenet_v1.onnx"
+  WEIGHTS_PATH: "artifacts/shufflenet_v1.onnx"
