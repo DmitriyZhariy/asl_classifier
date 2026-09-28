@@ -2,11 +2,12 @@ import time
 import uuid
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
+from typing import Annotated
 
 import onnxruntime as ort
-from fastapi import BackgroundTasks, FastAPI, HTTPException, UploadFile, status
+from fastapi import BackgroundTasks, FastAPI, File, HTTPException, UploadFile, status
 from PIL import UnidentifiedImageError
-from pydantic import BaseModel
+from pydantic import BaseModel, WithJsonSchema
 
 from asl import db
 from asl.config import settings
@@ -134,3 +135,50 @@ async def predict(
         all_probabilities=all_probabilities,
         latency_ms=latency_ms,
     )
+
+BinaryUploadFile = Annotated[
+    UploadFile,
+    WithJsonSchema({"type": "string", "format": "binary"}),
+]
+
+@app.post('/v1/predict_many')
+async def predict_many(
+    files: Annotated[list[BinaryUploadFile], File()],
+) -> list[Prediction]:
+    predictions = []
+    
+    for file in files:
+        t0 = time.perf_counter()
+
+        request_id = str(uuid.uuid4())
+
+        if file.content_type not in settings.allowed_content_types:
+            raise HTTPException(
+                status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+                detail="Поддерживаются только jpeg, png и webp файлы",
+            )
+
+        try:
+            image_tensor = await preprocess_image(file)
+        except UnidentifiedImageError as err:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="Файл изображения некорректен",
+            ) from err
+
+        all_probabilities, prediction_class, confidence = predict_image(app.state.bundle.model, image_tensor)
+
+        latency_ms = (time.perf_counter() - t0) * 1000
+
+        predictions.append(
+            Prediction(
+                request_id=request_id,
+                model_version=app.state.bundle.model_version,
+                prediction_class=prediction_class,
+                confidence=confidence,
+                all_probabilities=all_probabilities,
+                latency_ms=latency_ms,
+            )
+        )
+
+    return predictions
