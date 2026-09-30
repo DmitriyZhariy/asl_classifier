@@ -1,5 +1,6 @@
 images/
 notes.md
+TODO.md
 ignore/
 
 .venv/
@@ -11,3 +12,5 @@ __pycache__/
 *.pyc
 
 artifacts/*.pt
+datasets/**/*.png
+datasets/*.json

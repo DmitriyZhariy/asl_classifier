@@ -13,7 +13,9 @@ dependencies = [
     'psycopg[binary]',
     'onnxruntime',
     'python-multipart',
-    'pillow'
+    'pillow',
+    "mlflow-skinny>=3.16,<4",
+    "skops>=0.16.0",
 ]
 
 
@@ -23,6 +25,13 @@ dev = [
     'httpx',
     "locust",
     'ruff',
+]
+
+train = [
+    'torch',
+    'torchvision',
+    'albumentations',
+    'tqdm',
 ]
 
 
