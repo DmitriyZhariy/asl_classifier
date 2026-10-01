@@ -11,6 +11,9 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.utils.data as data
 import torchvision
+import mlflow
+from mlflow import MlflowClient
+from mlflow.exceptions import MlflowException
 from albumentations.pytorch import ToTensorV2
 from torchvision.datasets import ImageFolder
 from tqdm import tqdm
@@ -83,6 +86,38 @@ class EarlyStopping:
                         self.filepath.format(metric=METRIC, metric_val=cur_metric_value))
             print(f"EarlyStopping: stopping training at epoch {epoch + 1}")
 
+class ModelCheckpoint:
+    def __init__(self, filepath, save_best_only=True, save_step=1, metric='accuracy'):
+        self.filepath = filepath
+        self.save_best_only = save_best_only
+        self.save_step = save_step
+        self.metric=metric
+
+        if self.metric == 'accuracy':
+            self.best = -float('inf')
+            self.compare = lambda a, b: a > b
+        elif self.metric == 'loss':
+            self.best = float('inf')
+            self.compare = lambda a, b: a < b
+
+    def step(self, model, cur_metric_value, epoch):
+        save_flag = False
+
+        # Сохраняем по расписанию
+        if self.save_step > 0 and (epoch + 1) % self.save_step == 0:
+            # Сохраняем при улучшении метрики
+            if self.save_best_only:
+                if self.compare(cur_metric_value, self.best):
+                    self.best = cur_metric_value
+                    save_flag = True
+            else:
+                save_flag = True
+
+        if save_flag:
+            torch.save(model.state_dict(), 
+                       self.filepath.format(epoch=epoch + 1, metric=self.metric, metric_val=cur_metric_value))
+            print(f"ModelCheckpoint: model saved")
+
 class AlbumentationsTransform:
     def __init__(self):
         self.albumentations_transform = A.Compose(
@@ -141,7 +176,9 @@ def split_data(transform, train_size=0.8, batch_size=100):
     d_test = ImageFolder(TEST_PATH, transform=transform)
     test_data = data.DataLoader(d_test, batch_size=batch_size, shuffle=False)
 
-    return train_data, train_data_val, test_data
+    all_data_size = len(dataset_train) + len(d_test)
+
+    return train_data, train_data_val, test_data, all_data_size
 
 def get_submodule_names(module, max_depth=2, prefix=''):
     # вывод списка названий суб-блоков НН 
@@ -272,8 +309,20 @@ def train_model_with_callbacks_finetune(
         
         # scheduler
         update_scheduler(lr_scheduler, val_res)
+
+    for cb in callbacks:
+        if isinstance(cb, EarlyStopping) and not cb.early_stop and cb.save_best:
+            model.load_state_dict(cb.best_model)
+            torch.save(cb.best_model, cb.filepath.format(metric=METRIC, metric_val=cb.best_val))
+    
     return model, res_lst, res_lst_val
 
+def champion_auc(client: MlflowClient) -> tuple[str | None, float | None]:
+    try:
+        mv = client.get_model_version_by_alias(MODEL_NAME, "champion")
+    except MlflowException:
+        return None, None
+    return mv.version, client.get_run(mv.run_id).data.metrics.get("roc_auc")
 
 def main():
     device, classes = init_training()
@@ -296,13 +345,13 @@ def main():
 
     transforms = AlbumentationsTransform()
 
-    train_data, train_data_val, test_data = split_data(
+    train_data, train_data_val, test_data, all_data_size = split_data(
         transforms, 
         train_size=TRAIN_SIZE,
         batch_size=BATCH_SIZE,
     )
 
-    erly_st_path = os.path.join(model_path, 'best_model_{METRIC}-{metric_val:.4f}.pt')
+    erly_st_path = os.path.join(model_path, 'best_model_{metric}-{metric_val:.4f}.pt')
 
     earlystop_cb = EarlyStopping(
         filepath=erly_st_path, 
@@ -323,6 +372,42 @@ def main():
     onnx_path = Path(f'{model_path}/best_model_{METRIC}-{acc:.4f}.onnx')
 
     cm.convert_pt_to_onnx(model, onnx_path)
+
+    # mlflow.set_experiment(EXPERIMENT)
+    # client = MlflowClient()
+    # with mlflow.start_run() as run:
+    #     metadata = {"data_rows": all_data_size, "torch": torch.__version__}
+    #     mlflow.log_params({"seed": SEED, "data": str(TRAIN_PATH), "epochs": EPOCHS, "batch_size": BATCH_SIZE})
+    #     mlflow.log_metrics({"accuracy": round(acc, 4)})
+    #     mlflow.log_dict(metadata, "metadata.json")
+
+    #     run_dir = Path("artifacts") / run.info.run_id
+    #     run_dir.mkdir(parents=True, exist_ok=True)
+
+    #     pt_path = run_dir / "asl_best.pt"
+
+    #     torch.save(model.state_dict(), pt_path)
+
+    #     mlflow.log_artifact(
+    #         str(pt_path),
+    #         artifact_path="checkpoints",
+    #     )
+        
+    #     version = info.registered_model_version
+
+    # old_version, old_auc = champion_auc(client)
+    # promoted = old_auc is None or auc > old_auc + MIN_GAIN
+    # client.set_registered_model_alias(MODEL_NAME, "challenger", version)
+    # if promoted:
+    #     client.set_registered_model_alias(MODEL_NAME, "champion", version)
+
+    # result = {"run_id": run.info.run_id, "version": version, "roc_auc": round(auc, 4),
+    #           "champion_before": old_version, "champion_auc_before": old_auc, "promoted": promoted}
+    # print(json.dumps(result, ensure_ascii=False))
+    # xcom = Path("/airflow/xcom")
+    # if xcom.is_dir():
+    #     (xcom / "return.json").write_text(json.dumps(result))
+    # return result
 
 
 if __name__ == '__main__':
