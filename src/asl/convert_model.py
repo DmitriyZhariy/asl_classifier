@@ -5,22 +5,21 @@ import onnxruntime as ort
 import torch
 from torchvision.models import shufflenet_v2_x1_5
 
-PT_PATH = Path("weights/shufflenet_v1.pt")
-ONNX_PATH = Path("weights/shufflenet_v1.onnx")
+import numpy as np
 
 NUM_CLASSES = 3
 IMAGE_SIZE = 224
 BATCH_SIZE = 1
 
 
-def load_model() -> torch.nn.Module:
+def load_shufflenet_v2_x1_5(pt_path: Path) -> torch.nn.Module:
     model = shufflenet_v2_x1_5(
         weights=None,
         num_classes=NUM_CLASSES,
     )
 
     checkpoint = torch.load(
-        PT_PATH,
+        pt_path,
         map_location="cpu",
         weights_only=True,
     )
@@ -31,8 +30,8 @@ def load_model() -> torch.nn.Module:
     return model
 
 
-def main() -> None:
-    model = load_model()
+def convert_pt_to_onnx(model, onnx_output) -> onnx.onnx_ml_pb2.ModelProto:
+    model.eval()
 
     sample = torch.randn(
         BATCH_SIZE,
@@ -52,7 +51,7 @@ def main() -> None:
         torch.onnx.export(
             model,
             (sample,),
-            ONNX_PATH,
+            onnx_output,
             input_names=["images"],
             output_names=["logits"],
             opset_version=18,
@@ -66,15 +65,14 @@ def main() -> None:
             verify=True,
         )
 
-    onnx_model = onnx.load(ONNX_PATH)
+    onnx_model = onnx.load(onnx_output)
     onnx.checker.check_model(onnx_model)
 
     session = ort.InferenceSession(
-        str(ONNX_PATH),
+        str(onnx_output),
         providers=["CPUExecutionProvider"],
     )
 
-    import numpy as np
 
     with torch.inference_mode():
         pytorch_logits = model(sample).cpu().numpy()
@@ -93,11 +91,13 @@ def main() -> None:
 
     print("PyTorch and ONNX predictions match.")
 
-    print(f"ONNX model saved: {ONNX_PATH}")
+    print(f"ONNX model saved: {onnx_output}")
     print("Inputs:", [(x.name, x.shape, x.type) for x in session.get_inputs()])
     print("Outputs:", [(x.name, x.shape, x.type) for x in session.get_outputs()])
 
+    return onnx_model
+
 
 if __name__ == "__main__":
-    main()
+    convert_pt_to_onnx()
     

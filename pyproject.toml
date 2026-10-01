@@ -32,6 +32,9 @@ train = [
     'torchvision',
     'albumentations',
     'tqdm',
+    'onnx',
+    'onnxruntime',
+    'onnxscript',
 ]
 
 

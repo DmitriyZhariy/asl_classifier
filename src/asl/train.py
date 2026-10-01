@@ -15,6 +15,8 @@ from albumentations.pytorch import ToTensorV2
 from torchvision.datasets import ImageFolder
 from tqdm import tqdm
 
+from asl import convert_model as cm
+
 TRAIN_PATH = Path(os.getenv("TRAIN_PATH", "datasets/train"))
 TEST_PATH = Path(os.getenv("TEST_PATH", "datasets/test"))
 FORMAT_PATH = Path(os.getenv("FORMAT_PATH", "datasets/format.json"))
@@ -27,6 +29,8 @@ EXPERIMENT = os.getenv("MLFLOW_EXPERIMENT", "asl")
 MIN_GAIN = float(os.getenv("GATE_MIN_GAIN", "0.0"))
 SEED = 42
 SKOPS_TRUSTED = ["numpy.dtype", "sklearn.compose._column_transformer._RemainderColsList"]
+
+# ONNX_PATH = Path("artifacts/shufflenet_v1.onnx")
 
 def init_training() -> torch.device:
     random.seed(SEED)
@@ -306,7 +310,6 @@ def main():
     epochs = 2
 
     freeze_order = get_submodule_names(model, max_depth=1)[::-1]
-    print(len(freeze_order), freeze_order)
 
     transforms = A.Compose(
         [
@@ -355,7 +358,11 @@ def main():
         callbacks=[earlystop_cb]
     )
 
-    print(accuracy_model(model, device, test_data))
+    acc = accuracy_model(model, device, test_data)
+
+    onnx_path = Path(f'{model_path}/best_model_{metric}-{acc:.4f}.onnx')
+
+    onnx_model = cm.convert_pt_to_onnx(model, onnx_path)
 
 
 if __name__ == '__main__':
