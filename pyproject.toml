@@ -28,6 +28,8 @@ dev = [
 ]
 
 train = [
+    'numpy',
+    'pandas',
     'torch',
     'torchvision',
     'albumentations',

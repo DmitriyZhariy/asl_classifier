@@ -31,7 +31,7 @@ def load_shufflenet_v2_x1_5(
 def convert_pt_to_onnx(model, onnx_output) -> onnx.onnx_ml_pb2.ModelProto:
     model.eval()
 
-    sample = torch.randn(1, 3, 224, 224, dtype=torch.float32)
+    sample = torch.zeros(1, 3, 224, 224, dtype=torch.float32)
 
     batch_dim = torch.export.Dim(
         "batch_size",

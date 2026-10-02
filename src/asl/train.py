@@ -317,12 +317,37 @@ def train_model_with_callbacks_finetune(
     
     return model, res_lst, res_lst_val
 
-def champion_auc(client: MlflowClient) -> tuple[str | None, float | None]:
-    try:
-        mv = client.get_model_version_by_alias(MODEL_NAME, "champion")
-    except MlflowException:
+def champion_accuracy(
+    client: MlflowClient,
+) -> tuple[str | None, float | None]:
+    registered_model = client.get_registered_model(MODEL_NAME)
+
+    champion_version = registered_model.aliases.get("champion")
+
+    # Нормальный случай для первого запуска.
+    if champion_version is None:
         return None, None
-    return mv.version, client.get_run(mv.run_id).data.metrics.get("roc_auc")
+
+    # Получаем конкретную версию из найденного алиаса.
+    mv = client.get_model_version(
+        name=MODEL_NAME,
+        version=str(champion_version),
+    )
+
+    if not mv.run_id:
+        raise RuntimeError(
+            f"У champion version={mv.version} отсутствует run_id"
+        )
+
+    run = client.get_run(mv.run_id)
+    accuracy = run.data.metrics.get("accuracy")
+
+    if accuracy is None:
+        raise RuntimeError(
+            f"У champion version={mv.version} нет метрики accuracy"
+        )
+
+    return str(mv.version), float(accuracy)
 
 def main():
     device, classes = init_training()
@@ -351,10 +376,10 @@ def main():
         batch_size=BATCH_SIZE,
     )
 
-    erly_st_path = os.path.join(model_path, 'best_model_{metric}-{metric_val:.4f}.pt')
+    pt_path = os.path.join(model_path, 'best_model_{metric}-{metric_val:.4f}.pt')
 
     earlystop_cb = EarlyStopping(
-        filepath=erly_st_path, 
+        filepath=pt_path, 
         patience=5, 
         save_best=True,
     )
@@ -369,45 +394,99 @@ def main():
 
     acc = accuracy_model(model, device, test_data)
 
+    best_pt_path = Path(
+        earlystop_cb.filepath.format(
+            metric=METRIC,
+            metric_val=earlystop_cb.best_val,
+        )
+    )
+
+    if not best_pt_path.is_file():
+        raise FileNotFoundError(
+            f"Лучшие веса не найдены: {best_pt_path}"
+        )
+
     onnx_path = Path(f'{model_path}/best_model_{METRIC}-{acc:.4f}.onnx')
 
-    cm.convert_pt_to_onnx(model, onnx_path)
+    onnx_model = cm.convert_pt_to_onnx(model, onnx_path)
 
-    # mlflow.set_experiment(EXPERIMENT)
-    # client = MlflowClient()
-    # with mlflow.start_run() as run:
-    #     metadata = {"data_rows": all_data_size, "torch": torch.__version__}
-    #     mlflow.log_params({"seed": SEED, "data": str(TRAIN_PATH), "epochs": EPOCHS, "batch_size": BATCH_SIZE})
-    #     mlflow.log_metrics({"accuracy": round(acc, 4)})
-    #     mlflow.log_dict(metadata, "metadata.json")
+    mlflow.set_experiment(EXPERIMENT)
+    client = MlflowClient()
 
-    #     run_dir = Path("artifacts") / run.info.run_id
-    #     run_dir.mkdir(parents=True, exist_ok=True)
+    with mlflow.start_run() as run:
+        mlflow.log_params({
+            "seed": SEED,
+            "architecture": "shufflenet_v2_x1_5",
+            "train_path": str(TRAIN_PATH),
+            "test_path": str(TEST_PATH),
+            "epochs": EPOCHS,
+            "batch_size": BATCH_SIZE,
+            "train_size": TRAIN_SIZE,
+        })
 
-    #     pt_path = run_dir / "asl_best.pt"
+        mlflow.log_metric("accuracy", float(acc))
 
-    #     torch.save(model.state_dict(), pt_path)
+        metadata = {
+            "data_rows": all_data_size,
+            "torch_version": str(torch.__version__),
+            "class_to_idx": train_data.dataset.dataset.class_to_idx,
+            "preprocessing": {
+                "color_mode": "RGB",
+                "image_size": [224, 224],
+                "layout": "NCHW",
+                "dtype": "float32",
+                "mean": [0.485, 0.456, 0.406],
+                "std": [0.229, 0.224, 0.225],
+            },
+        }
 
-    #     mlflow.log_artifact(
-    #         str(pt_path),
-    #         artifact_path="checkpoints",
-    #     )
-        
-    #     version = info.registered_model_version
+        mlflow.log_dict(metadata, "metadata.json")
 
-    # old_version, old_auc = champion_auc(client)
-    # promoted = old_auc is None or auc > old_auc + MIN_GAIN
-    # client.set_registered_model_alias(MODEL_NAME, "challenger", version)
-    # if promoted:
-    #     client.set_registered_model_alias(MODEL_NAME, "champion", version)
+        metadata_path = Path(model_path) / "metadata.json"
+        metadata_path.write_text(
+            json.dumps(metadata, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
 
-    # result = {"run_id": run.info.run_id, "version": version, "roc_auc": round(auc, 4),
-    #           "champion_before": old_version, "champion_auc_before": old_auc, "promoted": promoted}
-    # print(json.dumps(result, ensure_ascii=False))
-    # xcom = Path("/airflow/xcom")
-    # if xcom.is_dir():
-    #     (xcom / "return.json").write_text(json.dumps(result))
-    # return result
+        info = mlflow.onnx.log_model(
+            onnx_model,
+            name="onnx",
+            registered_model_name=MODEL_NAME,
+            extra_files=[str(metadata_path)],
+        )
+
+        version = str(info.registered_model_version)
+
+        old_version, old_accuracy = champion_accuracy(client)
+
+        promoted = (
+            old_version is None
+            or float(acc) > old_accuracy + MIN_GAIN
+        )
+
+        client.set_registered_model_alias(
+            MODEL_NAME,
+            "challenger",
+            version,
+        )
+
+        if promoted:
+            client.set_registered_model_alias(
+                MODEL_NAME,
+                "champion",
+                version,
+            )
+
+        result = {
+            "run_id": run.info.run_id,
+            "version": version,
+            "accuracy": float(acc),
+            "champion_before": old_version,
+            "champion_accuracy_before": old_accuracy,
+            "promoted": promoted,
+        }
+
+        print(json.dumps(result, ensure_ascii=False, indent=2))
 
 
 if __name__ == '__main__':

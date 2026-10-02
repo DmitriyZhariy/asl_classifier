@@ -12,5 +12,7 @@ __pycache__/
 *.pyc
 
 artifacts/*.pt
+artifacts/*.onnx*
+artifacts/*.json
 datasets/**/*.png
 datasets/*.json
