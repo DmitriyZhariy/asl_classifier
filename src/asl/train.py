@@ -486,7 +486,13 @@ def main():
             "promoted": promoted,
         }
 
-        print(json.dumps(result, ensure_ascii=False, indent=2))
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    
+    xcom = Path("/airflow/xcom")
+    if xcom.is_dir():
+        (xcom / "return.json").write_text(json.dumps(result))
+    
+    return result
 
 
 if __name__ == '__main__':
