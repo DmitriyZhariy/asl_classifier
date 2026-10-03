@@ -7,7 +7,9 @@ class Settings(BaseSettings):
     weights_path: str = "artifacts/shufflenet_v1.onnx"
     database_url: str | None = None
     log_level: str = "INFO"
-    model_name: str | None = None
+    model_name: str | None = 'asl'
+    model_alias: str = "champion"
+    mlflow_tracking_uri: str = "http://mlflow.localhost"
     num_classes: int = 3
     class_names: list[str] = ["A", "B", "C"]
 

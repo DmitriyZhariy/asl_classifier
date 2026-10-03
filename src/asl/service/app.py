@@ -13,13 +13,14 @@ from asl import db
 from asl.config import settings
 from asl.inference.postprocessing import predict_image
 from asl.inference.preprocessing import preprocess_image
+from asl.model_store import load_model
 
 
 @dataclass
 class InferenceBundle:
     model: ort.InferenceSession
     model_version: str
-
+    metadata: dict
 
 class Prediction(BaseModel):
     request_id: uuid.UUID
@@ -32,11 +33,13 @@ class Prediction(BaseModel):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    model = ort.InferenceSession(settings.weights_path, providers=["CPUExecutionProvider"])
+    model, metadata, model_version = load_model()
+
 
     app.state.bundle = InferenceBundle(
         model=model,
-        model_version=settings.model_version,
+        model_version=model_version,
+        metadata=metadata,
     )
 
     db.init()

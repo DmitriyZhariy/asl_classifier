@@ -11,8 +11,6 @@ __pycache__/
 .ruff_cache/
 *.pyc
 
-artifacts/*.pt
-artifacts/*.onnx*
-artifacts/*.json
+artifacts/**/*
 datasets/**/*.png
 datasets/*.json

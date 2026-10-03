@@ -15,7 +15,8 @@ dependencies = [
     'python-multipart',
     'pillow',
     "mlflow-skinny>=3.16,<4",
-    "skops>=0.16.0",
+    "prometheus-client>=0.21",
+    "prometheus-fastapi-instrumentator>=8",
 ]
 
 
@@ -28,14 +29,12 @@ dev = [
 ]
 
 train = [
-    'numpy',
     'pandas',
     'torch',
     'torchvision',
     'albumentations',
     'tqdm',
     'onnx',
-    'onnxruntime',
     'onnxscript',
 ]
 

@@ -5,16 +5,15 @@ import random
 from pathlib import Path
 
 import albumentations as A
+import mlflow
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.utils.data as data
 import torchvision
-import mlflow
-from mlflow import MlflowClient
-from mlflow.exceptions import MlflowException
 from albumentations.pytorch import ToTensorV2
+from mlflow import MlflowClient
 from torchvision.datasets import ImageFolder
 from tqdm import tqdm
 
@@ -31,7 +30,6 @@ MODEL_NAME = os.getenv("MODEL_NAME", "asl")
 EXPERIMENT = os.getenv("MLFLOW_EXPERIMENT", "asl")
 MIN_GAIN = float(os.getenv("GATE_MIN_GAIN", "0.0"))
 SEED = 42
-SKOPS_TRUSTED = ["numpy.dtype", "sklearn.compose._column_transformer._RemainderColsList"]
 
 EPOCHS = 1
 TRAIN_SIZE = 0.8 # train-val distribution
@@ -116,7 +114,7 @@ class ModelCheckpoint:
         if save_flag:
             torch.save(model.state_dict(), 
                        self.filepath.format(epoch=epoch + 1, metric=self.metric, metric_val=cur_metric_value))
-            print(f"ModelCheckpoint: model saved")
+            print("ModelCheckpoint: model saved")
 
 class AlbumentationsTransform:
     def __init__(self):
